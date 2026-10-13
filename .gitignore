@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.pnpm-store/
+.vite/
+coverage/
+playwright-report/
+test-results/
+.vercel/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db

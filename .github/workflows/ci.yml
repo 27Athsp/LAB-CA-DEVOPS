@@ -1,0 +1,53 @@
+name: Test and build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test CSV processing
+        run: pnpm test
+      - name: Build Vercel-ready static app
+        run: pnpm build
+      - name: Install browser for end-to-end tests
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Test browser workflows
+        run: pnpm test:e2e
+      - name: Build Docker image
+        run: docker build -t clearcsv:ci .
+      - name: Smoke test container
+        run: |
+          docker run -d --name clearcsv-ci -p 8080:8080 clearcsv:ci
+          trap 'docker logs clearcsv-ci; docker rm -f clearcsv-ci' EXIT
+          curl --fail --retry 10 --retry-delay 2 --retry-connrefused http://localhost:8080/health
+          curl --fail http://localhost:8080/ | grep -q 'ClearCSV'
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-results
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
