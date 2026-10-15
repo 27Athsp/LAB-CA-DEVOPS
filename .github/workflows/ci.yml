@@ -41,8 +41,8 @@ jobs:
         run: |
           docker run -d --name clearcsv-ci -p 8080:8080 clearcsv:ci
           trap 'docker logs clearcsv-ci; docker rm -f clearcsv-ci' EXIT
-          curl --fail --retry 10 --retry-delay 2 --retry-connrefused http://localhost:8080/health
-          curl --fail http://localhost:8080/ | grep -q 'ClearCSV'
+          curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 2 --connect-timeout 2 --max-time 5 --retry-max-time 30 http://127.0.0.1:8080/health
+          curl --fail --silent --show-error http://127.0.0.1:8080/ | grep -q 'ClearCSV'
       - name: Upload browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
