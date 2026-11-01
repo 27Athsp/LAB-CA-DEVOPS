@@ -1,11 +1,12 @@
 # Three Linux hosts, three independently replaceable services
 
-Use three separate Linux machines with Docker Engine, Docker Compose v2.20+,
+Use three separate Linux x86_64 (amd64) machines with Docker Engine, Docker Compose v2.20+,
 Bash, curl, Python 3 and `flock` (util-linux). This directory does not SSH to any
 machine. Each command below runs **on the named host**, from a copy of this
 repository containing `deploy/`. CI may invoke the same commands through SSH
 after verifying the host key. Keep the same checkout path and environment-file
-directory between releases.
+directory between releases. The current GitHub workflow builds linux/amd64 application
+images; a different host architecture requires an explicit matching image build.
 
 | Host | Service | Container port | Incoming access |
 | --- | --- | --- | --- |

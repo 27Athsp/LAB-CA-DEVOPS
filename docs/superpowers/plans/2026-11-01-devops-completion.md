@@ -37,3 +37,7 @@ No CSV leaks in payload/logs. No credentials in source/logs. API failure must ne
 - Ruling:after-fill duplicates may exceed original duplicates when deduplication is off; corrected draft unreleased initial constraint, with a regression test, and aligned the task-created fixture DB without deleting records.
 - Ruling:bound browser workers to2 after a10-worker run hit2-second connection pressure while Docker builds ran; full14 then passed against final stack. No CSV tests removed or weakened.
 - Remote hosts, new GitHub workflow execution, registry publication and production/Vercel update are unverified and were not claimed. No commit or push.
+
+
+## Authorized publication follow-up
+The user requested push and report update. Implementation commit da2caaa24b447cc5166af4e61a3d7b0cd84afcf5 was pushed to main. GitHub Actions run 41336945319 verify and publish jobs succeeded; both SHA-tagged GHCR images were published. The deployment job was skipped by the manual gate. Current-commit Vercel frontend status is success; three-host deployment remains unverified. Updated report preserves Somaiya metadata and records these real outcomes. A subsequent documentation/report-only commit does not change the tested application code.

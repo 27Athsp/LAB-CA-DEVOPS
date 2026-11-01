@@ -40,7 +40,7 @@ or permanently running service. PostgreSQL uses its official pinned image.
 - Added Fastify 5.12.7, @fastify/cors 11.3.1, pg 8.23.1, node-pg-migrate 9.0.0.
   `package.json` and `pnpm-lock.yaml` are the source of truth for versions.
 - Fixed the external-API CSP conflict for Vercel; Docker uses a same-origin proxy.
-  The generated Word report under `output/` predates this enhancement.
+  The Word report under `output/` is updated alongside the current implementation.
 
 ## Quick start: complete application
 
@@ -332,9 +332,10 @@ docker push "$REGISTRY-frontend:v1.0.0"
 docker push "$REGISTRY-api:v1.0.0"
 ```
 
-These are operator commands; **nothing was pushed or published during this task**.
-Publish the local code yourself when ready. A new green workflow run and successful
-GHCR upload cannot be claimed from local verification alone.
+These are operator commands. The implementation was pushed to `main` on
+2 November 2026 IST; consult [the verification record](docs/VERIFICATION.md)
+for the actual GitHub Actions and GHCR outcomes. Local verification alone is not
+evidence of a successful remote workflow or upload.
 
 For remote deployment create a GitHub **production** environment with required
 reviewers as appropriate. Repository variables: `DEPLOY_ENABLED=true`,

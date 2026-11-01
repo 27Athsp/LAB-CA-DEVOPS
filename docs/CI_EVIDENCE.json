@@ -1,0 +1,36 @@
+{
+  "commit": "da2caaa24b447cc5166af4e61a3d7b0cd84afcf5",
+  "runId": 41336945319,
+  "runUrl": "https://github.com/27Athsp/LAB-CA-DEVOPS/actions/runs/41336945319",
+  "verify": {
+    "conclusion": "success",
+    "frontendTests": 37,
+    "apiTests": 19,
+    "postgresTests": 5,
+    "deploymentJsonTests": 4,
+    "staticBrowserTests": 12,
+    "liveBrowserTests": 2,
+    "containerSmoke": "passed",
+    "stagingAssertions": 9
+  },
+  "publish": {
+    "conclusion": "success",
+    "frontend": {
+      "image": "ghcr.io/27athsp/lab-ca-devops-frontend:sha-da2caaa24b447cc5166af4e61a3d7b0cd84afcf5",
+      "digest": "sha256:17589abab6c9390593bb099f7d9d9ced7748a78cbfa651b99bbb826c35dddc4f"
+    },
+    "api": {
+      "image": "ghcr.io/27athsp/lab-ca-devops-api:sha-da2caaa24b447cc5166af4e61a3d7b0cd84afcf5",
+      "digest": "sha256:ec0cb598bf1d2bd3e3be55cae9a9aefe586ac9f30ce4bcb83e18d68461cd54d4"
+    }
+  },
+  "deploy": {
+    "conclusion": "skipped",
+    "reason": "Manual deployment was not selected on this push; three-host deployment remains unverified"
+  },
+  "vercel": {
+    "state": "success",
+    "scope": "frontend only",
+    "targetUrl": "https://vercel.com/atharvap46-gmailcoms-projects/lab-ca-devops/9vzTZyM8Jpc8DtUstXgW3ntxq12L"
+  }
+}

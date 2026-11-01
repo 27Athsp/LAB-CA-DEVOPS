@@ -1,6 +1,6 @@
-# Local verification and delivery record
+# Verification and delivery record
 
-Verified on 1 November 2026. These are actual local results, not a claim that the new GitHub workflow, registry publishing or remote production deployment has run.
+Local verification was completed on 1 November 2026. The implementation was pushed and verified on GitHub Actions on 2 November 2026 IST. Registry publication succeeded; three-host deployment has not been attempted.
 
 ## Observed results
 
@@ -53,14 +53,57 @@ The demo actually verified these independent behaviors:
 - Default API port 3000 was busy. The ignored local `.env` selects 13001; container smoke now reads the same configuration and checks JSON content type before parsing.
 - Automatic approval review rejected mounting the whole repository into a workflow checker. Final check mounted only `ci.yml`, read-only, with network access disabled; it passed.
 
-## Not executed / external prerequisites
+## GitHub verification and registry publication
 
-- No commit, push, GHCR upload or production/Vercel modification was performed.
-- The enhanced GitHub Actions workflow is linted and its local equivalents passed, but has not run on GitHub after these changes.
-- GHCR publication requires pushing the reviewed code, Actions package permission, and a trusted main/release event. Existing SHA/release tags are reused/refused rather than overwritten.
-- Three actual hosts, private/VPN network/firewall, gateway authentication/TLS, host registry login, SSH keys/verified known hosts and protected configuration still need to be supplied. Deployment scripts/configurations are executable and tested locally for syntax/state/verification, not claimed remotely successful.
-- The shared metadata API intentionally has no per-user accounts. Use trusted classroom/VPN access or authenticated gateway; CORS is not authentication.
-- The older Word report is unchanged and describes the previous browser-only architecture. Use the current README and DevOps demo guide for this implementation.
+The user requested publication after the initial local handoff. Code commit
+`da2caaa24b447cc5166af4e61a3d7b0cd84afcf5` was pushed to `main`.
+[GitHub Actions run 41336945319](https://github.com/27Athsp/LAB-CA-DEVOPS/actions/runs/41336945319)
+completed successfully in 3m 42s: verify 2m 50s, publish 48s, deploy skipped.
+The deployment skip is expected: remote deployment requires manual dispatch,
+explicit enablement, a production environment and configured hosts/secrets.
+
+The remote verify job passed 37 frontend/helper tests, 19 API tests, 5 real
+PostgreSQL integration tests, 4 deployment JSON checks, the mocked deployment
+failure/rollback guard, 12 static browser checks plus 2 live API browser checks,
+container smoke, and all 9 persistence/backup/recovery/release/migration assertion groups.
+Actual job logs, rather than local results, were checked to confirm these results.
+
+Both images were pushed successfully under the exact commit tag:
+
+```text
+ghcr.io/27athsp/lab-ca-devops-frontend:sha-da2caaa24b447cc5166af4e61a3d7b0cd84afcf5
+ghcr.io/27athsp/lab-ca-devops-api:sha-da2caaa24b447cc5166af4e61a3d7b0cd84afcf5
+```
+
+| Image | Published manifest digest |
+| --- | --- |
+| Frontend | `sha256:17589abab6c9390593bb099f7d9d9ced7748a78cbfa651b99bbb826c35dddc4f` |
+| API | `sha256:ec0cb598bf1d2bd3e3be55cae9a9aefe586ac9f30ce4bcb83e18d68461cd54d4` |
+
+See [CI_EVIDENCE.json](CI_EVIDENCE.json) for the compact evidence record. These are
+commit tags; no new version/release tag was pushed during this follow-up.
+GitHub reported nonblocking managed-action Node 20 deprecation warnings and
+ubuntu-latest migration notices. The application toolchain is Node 24.22.2 and
+both jobs succeeded.
+
+Vercel also reported frontend deployment success for this commit through its
+existing repository integration. This is frontend hosting only, not deployment
+of the Node API or PostgreSQL. The Vercel status was read from GitHub; no new
+claim is made about a direct live-page inspection.
+
+## Remaining external prerequisites
+
+- Three actual hosts, private/VPN network and firewall, gateway authentication/TLS,
+  registry read access, SSH keys/verified known hosts and protected role configs
+  must be prepared and verified before exercising remote deployment.
+- Remote deployment scripts/configurations are executable and locally checked,
+  but no successful three-host deployment is claimed.
+- Registry packages may require authenticated pull access; use the protected
+  `read:packages` token procedure in the deployment guide.
+- The shared metadata API intentionally has no per-user accounts. Use trusted
+  classroom/VPN access or an authenticated gateway; CORS is not authentication.
+- The Somaiya Word report is updated for the current architecture, actual GitHub
+  verification, successful image publication and remaining remote-deployment limit.
 
 ## Files modified
 
@@ -121,3 +164,9 @@ The demo actually verified these independent behaviors:
 - `tests/history.test.ts`
 
 Pre-existing untracked report/image/sample CSV files were preserved. Generated builds, passwords, environment files, backup data and dependency directories are ignored rather than included in this file list.
+
+## Publication follow-up files
+
+- `docs/CI_EVIDENCE.json` records the actual successful remote run and image digests.
+- `output/ClearCSV_DevOps_Mini_Project_Report_Final.docx` is the updated, rendered Somaiya report.
+- README, this record, the deployment/demo guides and the plan ledger were updated to distinguish the successful publication from unverified three-host deployment.

@@ -72,9 +72,8 @@ running the complete demonstration again. There are no individual phase flags.
 
 Keep your published image references, successful CI run, deployment logs and
 screenshots available. Remove tokens, credentials and sensitive host details
-from any evidence shown to the examiner. The older generated Word report
-predates these API/database enhancements; treat it as historical documentation
-and use the current code and this guide for the present architecture.
+from any evidence shown to the examiner. The updated Word report in `output/` covers these API/database enhancements;
+use its verified evidence with the current code and this guide.
 
 ## Timed presentation
 
@@ -195,3 +194,15 @@ permissions, registry login and firewall rules, follow the full deployment guide
 
 Leave entries pending when they have not been executed. Keep local evidence and
 remote evidence clearly labeled.
+
+
+## Verified publication at delivery
+
+Code commit `da2caaa24b447cc5166af4e61a3d7b0cd84afcf5` passed
+[GitHub Actions run 41336945319](https://github.com/27Athsp/LAB-CA-DEVOPS/actions/runs/41336945319).
+The verify and publish jobs both succeeded; deploy was correctly skipped by the
+manual gate. The remote run checked 37 frontend/helper cases, 19 API cases, 5 real
+PostgreSQL cases, 4 deployment verifier cases, 12 static and 2 live browser cases,
+container smoke and all 9 staging demonstration groups. Both app images were
+published with `sha-da2caaa24b447cc5166af4e61a3d7b0cd84afcf5` tags. Show this run
+and `CI_EVIDENCE.json` for registry evidence. Three remote hosts remain unverified.
