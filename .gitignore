@@ -12,3 +12,17 @@ test-results/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local runtime secrets and generated API output
+secrets/
+.secrets/
+backups/
+dist-api/
+.devops-demo/
+
+deploy/*.env
+**/.clearcsv-*/
+
+
+__pycache__/
+*.pyc

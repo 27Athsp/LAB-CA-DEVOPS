@@ -1,5 +1,16 @@
 node_modules
 dist
+dist-api
+secrets
+backups
+.devops-demo
+output
+*.docx
+*.pdf
+*.csv
+!sample_data.csv
+*.png
+deploy
 .git
 .github
 .pnpm-store

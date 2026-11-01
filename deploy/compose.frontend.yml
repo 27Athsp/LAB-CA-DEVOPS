@@ -1,0 +1,15 @@
+services:
+  frontend:
+    image: ${FRONTEND_IMAGE:?Set an explicit GHCR release image}
+    restart: unless-stopped
+    environment:
+      API_UPSTREAM: ${API_UPSTREAM:?Set the API private hostname and port without a protocol}
+      APP_VERSION: ${APP_VERSION:?Set the image release tag}
+    ports:
+      - "${FRONTEND_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/health | grep -qx ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s

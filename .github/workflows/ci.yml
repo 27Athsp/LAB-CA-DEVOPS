@@ -1,53 +1,225 @@
-name: Test and build
+name: Test, build and publish
 
 on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy previously published images to configured production hosts
+        type: boolean
+        default: false
+      image_version:
+        description: Immutable published tag (sha-<full commit> or v<release>)
+        type: string
+        required: false
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        # Disposable CI database: trust is limited to the job's loopback port.
+        env:
+          POSTGRES_DB: clearcsv_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d clearcsv_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGDATABASE: clearcsv_test
+      PGUSER: postgres
+      APP_VERSION: 1.0.0
+      CORS_ORIGIN: http://127.0.0.1:4173
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          node-version: 24
+          fetch-depth: 0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.22.2
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm typecheck
-      - name: Test CSV processing
-        run: pnpm test
-      - name: Build Vercel-ready static app
-        run: pnpm build
+      - name: Test CSV processing and API validation
+        run: |
+          pnpm test
+          pnpm test:api
+      - name: Test deployment verification and rollback guard
+        run: |
+          python3 -m unittest discover -s deploy -p 'test_*.py'
+          bash deploy/test-remote.sh
+      - name: Test PostgreSQL integration
+        run: pnpm test:integration
+      - name: Build static frontend and API
+        run: |
+          pnpm build
+          pnpm build:api
       - name: Install browser for end-to-end tests
         run: pnpm exec playwright install --with-deps chromium
-      - name: Test browser workflows
+      - name: Test static browser workflows
         run: pnpm test:e2e
-      - name: Build Docker image
-        run: docker build -t clearcsv:ci .
-      - name: Smoke test container
+      - name: Migrate and start the real API
         run: |
-          docker run -d --name clearcsv-ci -p 8080:8080 clearcsv:ci
-          trap 'docker logs clearcsv-ci; docker rm -f clearcsv-ci' EXIT
-          curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 2 --connect-timeout 2 --max-time 5 --retry-max-time 30 http://127.0.0.1:8080/health
-          curl --fail --silent --show-error http://127.0.0.1:8080/ | grep -q 'ClearCSV'
+          pnpm db:migrate up
+          pnpm api:start > /tmp/clearcsv-api.log 2>&1 &
+          echo $! > /tmp/clearcsv-api.pid
+          curl --fail --silent --show-error --retry 20 --retry-all-errors --retry-delay 1 --connect-timeout 2 --max-time 5 http://127.0.0.1:3000/health
+      - name: Test browser history against the real API
+        env:
+          VITE_API_URL: http://127.0.0.1:3000
+          HISTORY_E2E: "true"
+        run: |
+          pnpm build
+          pnpm test:e2e --grep 'live API preserves'
+      - name: Verify release tag matches the application version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node -e 'const p = JSON.parse(require("fs").readFileSync("package.json")); if (process.env.RELEASE_TAG !== `v${p.version}`) throw new Error("Release tag must match package.json version");'
+          git merge-base --is-ancestor HEAD origin/main
+      - name: Stop local API before container test
+        if: always()
+        run: |
+          if [ -f /tmp/clearcsv-api.pid ]; then kill "$(cat /tmp/clearcsv-api.pid)" || true; fi
+          pkill -f 'dist-api/server[.]js' || true
+      - name: Build both application images and start Compose
+        env:
+          CORS_ORIGIN: http://127.0.0.1:8080
+        run: |
+          install -d -m 700 secrets
+          umask 077
+          openssl rand -hex 32 > secrets/postgres_password
+          chmod 0444 secrets/postgres_password
+          docker compose build
+          docker compose up -d --wait --wait-timeout 120
+      - name: Verify frontend, API, database and idempotent storage
+        run: |
+          node scripts/container-smoke.mjs
+          if docker run --rm --entrypoint /docker-entrypoint.d/04-frontend-config.sh --env 'API_UPSTREAM=api:3000;bad' clearcsv-frontend:1.0.0; then
+            echo 'Unsafe proxy address was accepted'; exit 1
+          fi
+      - name: Prove persistence, backup recovery, migrations and release rollback
+        run: node scripts/devops-demo.mjs
+      - name: Show diagnostics and clean up containers
+        if: always()
+        run: |
+          docker compose logs --no-color
+          docker compose down --volumes --remove-orphans
+          if [ -f /tmp/clearcsv-api.log ]; then cat /tmp/clearcsv-api.log; fi
       - name: Upload browser failure evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: browser-test-results
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  publish:
+    needs: verify
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: publish-${{ github.sha }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build and publish immutable frontend and API images
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+        run: |
+          set -euo pipefail
+          repository="${REPOSITORY,,}"
+          version="sha-$COMMIT"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          for role in frontend api; do
+            dockerfile=Dockerfile
+            if [ "$role" = api ]; then dockerfile=api/Dockerfile; fi
+            image="ghcr.io/$repository-$role"
+            if docker manifest inspect "$image:$version" > "/tmp/$role-sha.json" 2>/dev/null; then
+              docker pull "$image:$version"
+            else
+              docker build --file "$dockerfile" --build-arg "APP_VERSION=$version" --tag "$image:$version" .
+              docker push "$image:$version"
+              docker manifest inspect "$image:$version" > "/tmp/$role-sha.json"
+            fi
+            if [ -n "$RELEASE_TAG" ]; then
+              if docker manifest inspect "$image:$RELEASE_TAG" > "/tmp/$role-release.json" 2>/dev/null; then
+                cmp "/tmp/$role-sha.json" "/tmp/$role-release.json" || { echo 'Refusing to overwrite a release tag with different image content'; exit 1; }
+              else
+                docker buildx imagetools create --prefer-index=false --tag "$image:$RELEASE_TAG" "$image:$version"
+              fi
+            fi
+          done
+
+  deploy:
+    needs: verify
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Deploy to explicitly configured hosts
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          SSH_PORT: ${{ secrets.DEPLOY_PORT }}
+          FRONTEND_HOST: ${{ secrets.DEPLOY_FRONTEND_HOST }}
+          API_HOST: ${{ secrets.DEPLOY_API_HOST }}
+          DB_HOST: ${{ secrets.DEPLOY_DB_HOST }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          DEPLOY_ENV_DIR: ${{ vars.DEPLOY_ENV_DIR || '/etc/clearcsv' }}
+          IMAGE_VERSION: ${{ inputs.image_version }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          : "${SSH_KEY:?Missing DEPLOY_SSH_KEY}" "${KNOWN_HOSTS:?Missing pinned DEPLOY_KNOWN_HOSTS}"
+          : "${SSH_USER:?Missing DEPLOY_USER}" "${FRONTEND_HOST:?Missing DEPLOY_FRONTEND_HOST}"
+          : "${API_HOST:?Missing DEPLOY_API_HOST}" "${DB_HOST:?Missing DEPLOY_DB_HOST}"
+          [[ "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9_./-]+$ ]] || { echo 'Set DEPLOY_PATH to an absolute deployment checkout path'; exit 1; }
+          [[ "$IMAGE_VERSION" =~ ^(sha-[0-9a-f]{40}|v[0-9]+\.[0-9]+\.[0-9]+([.-][a-zA-Z0-9.-]+)?)$ ]] || { echo 'Choose an immutable sha or release image tag'; exit 1; }
+          [[ "$DEPLOY_ENV_DIR" =~ ^/[a-zA-Z0-9_./-]+$ ]] || { echo 'Set DEPLOY_ENV_DIR to an absolute protected environment directory'; exit 1; }
+          install -d -m 700 ~/.ssh
+          umask 077
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          repository="${REPOSITORY,,}"
+          for role in database api frontend; do
+            case "$role" in database) host="$DB_HOST" ;; api) host="$API_HOST" ;; frontend) host="$FRONTEND_HOST" ;; esac
+            release_env="APP_VERSION='$IMAGE_VERSION' API_IMAGE='ghcr.io/$repository-api:$IMAGE_VERSION' FRONTEND_IMAGE='ghcr.io/$repository-frontend:$IMAGE_VERSION'"
+            if [ "$role" = api ]; then
+              ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+                "$SSH_USER@$host" "cd '$DEPLOY_PATH' && $release_env bash deploy/remote-deploy.sh api '$DEPLOY_ENV_DIR/api.env' migrate up"
+            fi
+            ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+              "$SSH_USER@$host" "cd '$DEPLOY_PATH' && $release_env bash deploy/remote-deploy.sh '$role' '$DEPLOY_ENV_DIR/$role.env' up"
+          done

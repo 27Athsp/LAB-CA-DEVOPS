@@ -1,14 +1,19 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, FileText, LockKeyhole, X } from 'lucide-react';
 import { UploadArea } from './components/UploadArea';
 import { DataPreview } from './components/DataPreview';
 import { Metrics, QualityReport } from './components/QualityReport';
 import { CleaningPanel } from './components/CleaningPanel';
+import { RunHistory } from './components/RunHistory';
+import { createRunId, createRunSummary, loadHistoryConfig, resolveHistoryConfig, type HistoryConfig } from './lib/history';
 import { analyzeDataset, cleanDataset, DEFAULT_OPTIONS, parseCsv, serializeCsv, validateFile, type CleanOptions, type CleanResult, type Dataset, type QualityReport as Report } from './lib/processor';
 import sampleCsv from '../sample_data.csv?raw';
 
 interface LoadedFile { id: number; name: string; dataset: Dataset; report: Report; sample: boolean }
-interface Result { cleaned: CleanResult; report: Report }
+interface Result { id: string; cleaned: CleanResult; report: Report }
+
+const buildConfig = { VITE_API_URL: import.meta.env.VITE_API_URL, VITE_APP_VERSION: import.meta.env.VITE_APP_VERSION };
+const defaultConfig = resolveHistoryConfig({}, buildConfig);
 
 export default function App() {
   const [file, setFile] = useState<LoadedFile | null>(null);
@@ -19,6 +24,15 @@ export default function App() {
   const [error, setError] = useState('');
   const [announcement, setAnnouncement] = useState('');
   const operation = useRef(0);
+  const [config, setConfig] = useState<HistoryConfig | null>(null);
+  const configRequest = useRef<Promise<HistoryConfig> | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    configRequest.current ??= loadHistoryConfig(buildConfig);
+    void configRequest.current.then((next) => { if (active) setConfig(next); });
+    return () => { active = false; };
+  }, []);
 
   function clear() {
     operation.current++;
@@ -55,7 +69,7 @@ export default function App() {
   function clean() {
     if (!file) return;
     const cleaned = cleanDataset(file.dataset, options);
-    setResult({ cleaned, report: analyzeDataset(cleaned.dataset) }); setShowCleaned(true); setAnnouncement('Cleaning complete. Your CSV is ready to download.');
+    setResult({ id: createRunId(), cleaned, report: analyzeDataset(cleaned.dataset) }); setShowCleaned(true); setAnnouncement('Cleaning complete. Your CSV is ready to download.');
   }
 
   function download() {
@@ -87,7 +101,8 @@ export default function App() {
         </div>
         <CleaningPanel options={options} onOptions={changeOptions} onClean={clean} onDownload={download} hasData={!!file} busy={busy} result={result?.cleaned ?? null} before={file?.report ?? null} after={result?.report ?? null} />
       </div>
-      <footer><span>CSV in. Clarity out.</span><span>UTF-8 CSV · No sign-up · No data stored</span></footer>
+      {config?.historyEnabled ? <RunHistory config={config} summary={file && result ? createRunSummary(result.id, file.report, result.report, config.appVersion) : null} /> : null}
+      <footer><span>CSV in. Clarity out. · Version {(config ?? defaultConfig).appVersion}</span><span>CSV contents stay local; only saved summary counts leave browser.</span></footer>
     </main>
   </>;
 }

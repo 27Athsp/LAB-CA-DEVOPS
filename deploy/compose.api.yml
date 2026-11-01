@@ -1,0 +1,36 @@
+services:
+  api:
+    image: ${API_IMAGE:?Set an explicit GHCR release image}
+    command: ["node", "dist-api/server.js"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      APP_VERSION: ${APP_VERSION:?Set the image release tag}
+      PGHOST: ${PGHOST:?Set the database private hostname}
+      PGPORT: ${PGPORT:-5432}
+      PGDATABASE: ${PGDATABASE:?Set the database name}
+      PGUSER: ${PGUSER:?Set the database user}
+      PGPASSWORD_FILE: /run/secrets/postgres_password
+      CORS_ORIGIN: ${CORS_ORIGIN:?Set the exact frontend HTTPS origin}
+      PGSSLROOTCERT: ${PGSSLROOTCERT:-}
+      PGSSLMODE: ${PGSSLMODE:-disable}
+    ports:
+      - "${API_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-3000}:3000"
+    volumes:
+      - type: bind
+        source: ${API_CERTS_DIR:?Set an existing certificate directory, even when using a VPN}
+        target: /run/certs
+        read_only: true
+    secrets:
+      - postgres_password
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)throw Error('unhealthy');return r.json()}).then(j=>{if(j.status!=='ok'||j.version!==process.env.APP_VERSION)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_FILE:?Set an absolute path to the protected password file}

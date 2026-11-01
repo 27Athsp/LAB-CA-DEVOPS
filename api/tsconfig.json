@@ -1,0 +1,4 @@
+{
+  "compilerOptions": { "target": "ES2023", "module": "NodeNext", "moduleResolution": "NodeNext", "strict": true, "esModuleInterop": true, "skipLibCheck": true, "rootDir": ".", "outDir": "../dist-api", "types": ["node"] },
+  "include": ["*.ts"], "exclude": ["vitest.config.ts"]
+}
